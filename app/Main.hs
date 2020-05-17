@@ -182,8 +182,11 @@ makeRoomId = do
 
 main :: IO ()
 main = do
-  words <- readLines "words-easy.txt"
+  easyWords <- readLines "words-easy.txt"
+  mediumWords <- readLines "words-medium.txt"
+  hardWords <- readLines "words-hard.txt"
+  let words = easyWords ++ mediumWords ++ hardWords
   state <- newMVar newServerState
-  putStrLn $ "There are " ++ (show (length words)) ++ " easy words."
+  putStrLn $ "There are " ++ (show (length words)) ++ " words."
   putStrLn $ "http://localhost:8080"
   run 8080 (app (mkNextWord words) state)
