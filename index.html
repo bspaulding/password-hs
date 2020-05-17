@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8" />
+</head>
+<body>
+  <h1>Hello!</h1>
+  <div id="room-id">In the lobby</div>
+  <div>
+    <input type="text" name="player-name" />
+    <button id="update-player-name">Set Name</button>
+  </div>
+  <div>
+    <button id="create-room">Create Room</button>
+    <input type="text" name="room-id" id="input-room-id" />
+    <button id="join-room">Join Room</button>
+  </div>
+  <button id="new-word">New Word</button>
+  <script>
+    const socket = new WebSocket("ws://localhost:8080");
+    socket.addEventListener("open", function(event) {
+      const updateNameButton = document.querySelector("#update-player-name");
+      updateNameButton.addEventListener("click", function() {
+        const nameInput = document.querySelector("input[name=player-name]");
+        const name = nameInput.value;
+        document.querySelector("h1").textContent = "Hello, " + name + "!";
+        socket.send(
+          JSON.stringify({ type: "player-name-updated", payload: name })
+        );
+      });
+
+      const newWordButton = document.querySelector("button#new-word");
+      newWordButton.addEventListener("click", function() {
+        socket.send(JSON.stringify({ type: "new-word" }));
+      });
+
+      const createRoomButton = document.querySelector("button#create-room");
+      createRoomButton.addEventListener("click", function() {
+        socket.send(JSON.stringify({ type: "create-room" }));
+      });
+
+      const joinRoomButton = document.querySelector("button#join-room");
+      joinRoomButton.addEventListener("click", function() {
+        const roomId = document.querySelector("#input-room-id").value;
+        if (roomId) {
+          socket.send(JSON.stringify({ type: "join-room", payload: roomId }));
+        }
+      });
+    });
+    socket.addEventListener("message", function(event) {
+      const data = JSON.parse(event.data);
+      console.log("recvd: ", data);
+      const { roomId, word } = data;
+      if (word) {
+        document.querySelector("h1").textContent = word;
+      }
+      if (roomId) {
+        document.querySelector("#room-id").textContent = "In room " + roomId;
+      }
+    });
+  </script>
+</body>

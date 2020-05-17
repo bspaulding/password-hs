@@ -1,0 +1,58 @@
+name:                password-hs
+version:             0.1.0.0
+github:              "bspaulding/password-hs"
+license:             BSD3
+author:              "Bradley Spaulding"
+maintainer:          "brad.spaulding@gmail.com"
+copyright:           "MIT"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/bspaulding/password-hs#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- wai
+- warp
+- wai-websockets
+- http-types
+- websockets
+- text
+- random
+- containers
+- uuid
+- aeson
+
+library:
+  source-dirs: src
+
+executables:
+  password-hs-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - password-hs
+
+tests:
+  password-hs-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - password-hs
