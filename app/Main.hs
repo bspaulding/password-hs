@@ -20,17 +20,26 @@ import Network.Wai
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Handler.WebSockets
 import qualified Network.WebSockets as WS
-import qualified Password.Msg.CreateRoomResponse as CreateRoomResponse
-import qualified Password.Msg.ErrorResponse as ErrorResponse
-import qualified Password.Msg.JoinedRoom as JoinedRoom
-import qualified Password.Msg.JoinRoomResponse as JoinRoomResponse
-import qualified Password.Msg.NewWordResponse as NewWordResponse
-import qualified Password.Msg.PlayerNameChanged as PlayerNameChanged
 import System.Random
 
 type RoomId = String
 type ConnId = String
 type Client = (ConnId, WS.Connection)
+
+data WSResponse
+  = ErrorResponse { err :: String }
+  | IdentifyConnection { connId :: String }
+  | CreateRoomResponse { roomId :: String }
+  | JoinedRoom { connId :: String, name :: String }
+  | JoinRoomResponse { roomId :: String }
+  | NewWordResponse { word :: String }
+  | PlayerNameChanged { connId :: String, name :: String }
+  deriving (Generic, Show)
+
+wsResponseToJSONOptions = defaultOptions { sumEncoding = TaggedObject { tagFieldName = "type", contentsFieldName = "contents" } }
+instance ToJSON WSResponse where
+  toJSON = genericToJSON wsResponseToJSONOptions
+  toEncoding = genericToEncoding wsResponseToJSONOptions
 
 instance Show WS.Connection where
   show conn = "<wsconn>"
@@ -101,6 +110,7 @@ app nextWord stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
       conn <- WS.acceptRequest pending_conn
       id <- fmap UUID.toString UUID.nextRandom
       let client = (id, conn)
+      WS.sendTextData conn (encode (IdentifyConnection id))
       modifyMVar_ stateM $ \state -> do
         putStrLn $ "Adding user " ++ id ++ " to lobby"
         return $ addToLobby client state
@@ -119,13 +129,13 @@ app nextWord stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                       putStrLn $ "Client '" ++ id ++ "' created and joined room " ++ roomId
                       putStrLn (show state')
                       return state'
-                    WS.sendTextData conn (encode CreateRoomResponse.CreateRoomResponse { CreateRoomResponse.roomId = roomId })
+                    WS.sendTextData conn (encode CreateRoomResponse { roomId = roomId })
                   (Just "join-room", Nothing) -> do
-                      WS.sendTextData conn (encode ErrorResponse.ErrorResponse { ErrorResponse.err = "Please specify a room id as 'payload' in the request" })
+                      WS.sendTextData conn (encode $ ErrorResponse "Please specify a room id as 'payload' in the request")
                   (Just "join-room", Just roomId) -> do
                       case Map.lookup roomId (rooms state) of
                         Nothing -> do
-                          WS.sendTextData conn (encode ErrorResponse.ErrorResponse { ErrorResponse.err = "No room exists with id " ++ roomId })
+                          WS.sendTextData conn (encode ErrorResponse { err = "No room exists with id " ++ roomId })
                         Just _ -> do
                           modifyMVar_ stateM $ \state -> do
                             let state' = moveClientToRoom roomId client state
@@ -133,17 +143,18 @@ app nextWord stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                             putStrLn (show state')
                             return state'
                           state <- readMVar stateM
-                          broadcast roomId (TL.toStrict . T.decodeUtf8 $ encode JoinedRoom.JoinedRoom { JoinedRoom.connId = id, JoinedRoom.name = playerName client state }) state
-                          WS.sendTextData conn (encode JoinRoomResponse.JoinRoomResponse { JoinRoomResponse.roomId = roomId })
+                          broadcast roomId (TL.toStrict . T.decodeUtf8 $ encode JoinedRoom { connId = id, name = playerName client state }) state
+                          -- TODO: Send current room state, including word and players in room
+                          WS.sendTextData conn (encode JoinRoomResponse { roomId = roomId })
                   (Just "player-name-updated", Nothing) -> do
-                      WS.sendTextData conn (encode ErrorResponse.ErrorResponse { ErrorResponse.err = "No name provided." })
+                      WS.sendTextData conn (encode ErrorResponse { err = "No name provided." })
                   (Just "player-name-updated", Just name) -> do
                       modifyMVar_ stateM $ \state -> do
                         let state' = updatePlayerName client name state
                         putStrLn $ "Client '" ++ id ++ "' changed name to '" ++ name ++ "'"
                         putStrLn (show state')
                         return state'
-                      let response = encode PlayerNameChanged.PlayerNameChanged { PlayerNameChanged.connId = id, PlayerNameChanged.name = name }
+                      let response = encode PlayerNameChanged { connId = id, name = name }
                       let roomId = getRoomId id state
                       case roomId of
                         Nothing -> do
@@ -152,11 +163,11 @@ app nextWord stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                           broadcast roomId (TL.toStrict . T.decodeUtf8 $ response) state
                   (Just "new-word", _) -> do
                     word <- nextWord
-                    WS.sendTextData conn (encode NewWordResponse.NewWordResponse { NewWordResponse.word = word })
+                    WS.sendTextData conn (encode NewWordResponse { word = word })
                   _ -> do
-                    WS.sendTextData conn (encode ErrorResponse.ErrorResponse { ErrorResponse.err = "Unknown message type" })
+                    WS.sendTextData conn (encode ErrorResponse { err = "Unknown message type" })
               Nothing -> do
-                WS.sendTextData conn (encode ErrorResponse.ErrorResponse { ErrorResponse.err = "Failed to parse message" })
+                WS.sendTextData conn (encode ErrorResponse { err = "Failed to parse message" })
 
     httpApp :: Application
     httpApp request respond = do
