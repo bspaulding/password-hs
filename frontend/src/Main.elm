@@ -17,14 +17,15 @@ port receiveMessage : (String -> msg) -> Sub msg
 
 createRoom : Cmd msg
 createRoom =
-    sendMessage "{ \"type\": \"create-room\" }"
+    E.object [ ( "type", E.string "create-room" ) ]
+        |> E.encode 0
+        |> sendMessage
 
 
 joinRoom : RoomId -> Cmd msg
 joinRoom roomId =
-    "{ \"type\": \"join-room\", \"payload\": \""
-        ++ roomId
-        ++ "\" }"
+    E.object [ ( "type", E.string "join-room" ), ( "payload", E.string roomId ) ]
+        |> E.encode 0
         |> sendMessage
 
 
