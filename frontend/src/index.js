@@ -1,9 +1,19 @@
-import './main.css';
-import { Elm } from './Main.elm';
-import * as serviceWorker from './serviceWorker';
+import "./main.css";
+import { Elm } from "./Main.elm";
+import * as serviceWorker from "./serviceWorker";
 
-Elm.Main.init({
-  node: document.getElementById('root')
+const app = Elm.Main.init({
+  node: document.getElementById("root")
+});
+
+const socket = new WebSocket("ws://localhost:8080");
+
+app.ports.sendMessage.subscribe(function(message) {
+  socket.send(message);
+});
+
+socket.addEventListener("message", function(event) {
+  app.ports.receiveMessage.send(event.data);
 });
 
 // If you want your app to work offline and load faster, you can change
