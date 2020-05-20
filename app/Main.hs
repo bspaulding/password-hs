@@ -183,11 +183,12 @@ mkNextWord words = do
 
 makeRoomId :: IO String
 makeRoomId = do
-  a <- getStdRandom (randomR ('a', 'z'))
-  b <- getStdRandom (randomR ('a', 'z'))
-  c <- getStdRandom (randomR ('a', 'z'))
-  d <- getStdRandom (randomR ('a', 'z'))
+  a <- getStdRandom chars
+  b <- getStdRandom chars
+  c <- getStdRandom chars
+  d <- getStdRandom chars
   return [a,b,c,d]
+  where chars = randomR ('a', 'z')
 
 main :: IO ()
 main = do
@@ -196,6 +197,6 @@ main = do
   hardWords <- readLines "words-hard.txt"
   let words = easyWords ++ mediumWords ++ hardWords
   state <- newMVar newServerState
-  putStrLn $ "There are " ++ (show (length words)) ++ " words."
-  putStrLn $ "http://localhost:8080"
+  print $ "There are " ++ (show (length words)) ++ " words."
+  print "http://localhost:8080"
   run 8080 (app (mkNextWord words) state)
