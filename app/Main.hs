@@ -46,21 +46,25 @@ instance ToJSON WSResponse where
 instance Show WS.Connection where
   show conn = "<wsconn>"
 
+data GameWords = GameWords { easy :: [String], medium :: [String], hard :: [String] } deriving (Show)
+
 data ServerState =
   ServerState
     { rooms :: Map RoomId [Client]
     , roomIdByConnId :: Map ConnId RoomId
     , lobby :: [Client]
     , names :: Map ConnId String
+    , gameWords :: GameWords
     } deriving (Show)
 
-newServerState :: ServerState
-newServerState =
+newServerState :: GameWords -> ServerState
+newServerState gameWords =
   ServerState
     { rooms = Map.empty
     , lobby = []
     , names = Map.empty
     , roomIdByConnId = Map.empty
+    , gameWords = gameWords
     }
 
 addToLobby :: Client -> ServerState -> ServerState
@@ -99,8 +103,8 @@ broadcast roomId message s = do
   T.putStrLn $ T.pack $ "broadcast to room " ++ roomId ++ ": " ++ (T.unpack message)
   forM_ (findWithDefault [] roomId (rooms s)) $ \(_, conn) -> WS.sendTextData conn message
 
-app :: IO String -> MVar ServerState -> Application
-app nextWord stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
+app :: MVar ServerState -> Application
+app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
   where
     disconnect client = do
       modifyMVar_ stateM $ \s -> do
@@ -164,7 +168,7 @@ app nextWord stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                         Just roomId -> do
                           broadcast roomId (TL.toStrict . T.decodeUtf8 $ response) state
                   (Just "new-word", _) -> do
-                    word <- nextWord
+                    word <- nextWord (gameWords state) easy
                     WS.sendTextData conn (encode NewWordResponse { word = word })
                   _ -> do
                     WS.sendTextData conn (encode ErrorResponse { err = "Unknown message type" })
@@ -181,6 +185,16 @@ mkNextWord words = do
   i <- getStdRandom (randomR (0, length words - 1))
   return $ words !! i
 
+nextWord :: GameWords -> (GameWords -> [String]) -> IO String
+nextWord gameWords cat = mkNextWord $ cat gameWords
+
+loadGameWords :: IO GameWords
+loadGameWords = do
+  easyWords <- readLines "words-easy.txt"
+  mediumWords <- readLines "words-medium.txt"
+  hardWords <- readLines "words-hard.txt"
+  return $ GameWords { easy = easyWords , medium = mediumWords , hard = hardWords }
+
 makeRoomId :: IO String
 makeRoomId = do
   a <- getStdRandom chars
@@ -192,11 +206,7 @@ makeRoomId = do
 
 main :: IO ()
 main = do
-  easyWords <- readLines "words-easy.txt"
-  mediumWords <- readLines "words-medium.txt"
-  hardWords <- readLines "words-hard.txt"
-  let words = easyWords ++ mediumWords ++ hardWords
-  state <- newMVar newServerState
-  print $ "There are " ++ (show (length words)) ++ " words."
+  gameWords <- loadGameWords
+  state <- newMVar (newServerState gameWords)
   print "http://localhost:8080"
-  run 8080 (app (mkNextWord words) state)
+  run 8080 (app state)
