@@ -31,6 +31,7 @@ dependencies:
 - containers
 - uuid
 - aeson
+- wai-app-static
 
 library:
   source-dirs: src
