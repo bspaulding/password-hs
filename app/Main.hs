@@ -176,7 +176,9 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                 WS.sendTextData conn (encode ErrorResponse { err = "Failed to parse message" })
 
     httpApp :: Application
-    httpApp = staticApp $ (defaultWebAppSettings "frontend/build") { ssIndices = [unsafeToPiece "index.html"]}
+    httpApp = staticApp staticAppSettings
+    
+    staticAppSettings = (defaultWebAppSettings "frontend/build") { ssIndices = [unsafeToPiece "index.html"]}
 
 readLines = fmap Prelude.lines . readFile
 
