@@ -17,10 +17,12 @@ import Data.UUID.V4 as UUID
 import GHC.Generics
 import Network.HTTP.Types
 import Network.Wai
+import Network.Wai.Application.Static
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Handler.WebSockets
 import qualified Network.WebSockets as WS
 import System.Random
+import WaiAppStatic.Types (unsafeToPiece)
 
 type RoomId = String
 type ConnId = String
@@ -170,11 +172,7 @@ app nextWord stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                 WS.sendTextData conn (encode ErrorResponse { err = "Failed to parse message" })
 
     httpApp :: Application
-    httpApp request respond = do
-      respond $ case rawPathInfo request of
-          "/" -> responseFile status200 [("Content-Type", "text/html")] "index.html" Nothing
-          "/hello" -> responseLBS status200 [("Content-Type", "text/plain")] "Hello, Web!"
-          _ -> responseLBS status404 [("Content-Type", "text/plain")] "Not Found"
+    httpApp = staticApp $ (defaultWebAppSettings "frontend/build") { ssIndices = [unsafeToPiece "index.html"]}
 
 readLines = fmap Prelude.lines . readFile
 
