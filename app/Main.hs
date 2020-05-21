@@ -117,7 +117,7 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
       let client = (id, conn)
       WS.sendTextData conn (encode (IdentifyConnection id))
       modifyMVar_ stateM $ \state -> do
-        putStrLn $ "Adding user " ++ id ++ " to lobby"
+        print $ "Adding user " ++ id ++ " to lobby"
         return $ addToLobby client state
       flip finally (disconnect client) $
         WS.withPingThread conn 30 (return ()) $
@@ -131,7 +131,7 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                     roomId <- makeRoomId
                     modifyMVar_ stateM $ \state -> do
                       let state' = moveClientToRoom roomId client state
-                      putStrLn $ "Client '" ++ id ++ "' created and joined room " ++ roomId
+                      print $ "Client '" ++ id ++ "' created and joined room " ++ roomId
                       print state'
                       return state'
                     WS.sendTextData conn (encode CreateRoomResponse { roomId = roomId })
@@ -144,7 +144,7 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                         Just _ -> do
                           modifyMVar_ stateM $ \state -> do
                             let state' = moveClientToRoom roomId client state
-                            putStrLn $ "Client '" ++ id ++ "' joined room " ++ roomId
+                            print $ "Client '" ++ id ++ "' joined room " ++ roomId
                             print state'
                             return state'
                           state <- readMVar stateM
