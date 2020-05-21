@@ -74,12 +74,12 @@ removeFromLobby :: Client -> ServerState -> ServerState
 removeFromLobby client s = s { lobby = Prelude.filter ((/= fst client) . fst) (lobby s) }
 
 removeFromRooms :: Client -> ServerState -> ServerState
-removeFromRooms client s = s { rooms = Map.map (\clients -> Prelude.filter ((/= fst client) . fst) clients) (rooms s)
+removeFromRooms client s = s { rooms = Map.map (Prelude.filter ((/= fst client) . fst)) (rooms s)
                              , roomIdByConnId = Map.delete (fst client) (roomIdByConnId s)
                              }
 
 removeClient :: Client -> ServerState -> ServerState
-removeClient client s = (removeFromLobby client (removeFromRooms client s))
+removeClient client s = removeFromLobby client (removeFromRooms client s)
 
 addToRoom :: RoomId -> Client -> ServerState -> ServerState
 addToRoom roomId client s = s { rooms = insertWith (++) roomId [client] (rooms s)
@@ -100,16 +100,15 @@ playerName (connId, _) s = Map.findWithDefault "Unknown" connId (names s)
 
 broadcast :: RoomId -> T.Text -> ServerState -> IO ()
 broadcast roomId message s = do
-  T.putStrLn $ T.pack $ "broadcast to room " ++ roomId ++ ": " ++ (T.unpack message)
+  T.putStrLn $ T.pack $ "broadcast to room " ++ roomId ++ ": " ++ T.unpack message
   forM_ (findWithDefault [] roomId (rooms s)) $ \(_, conn) -> WS.sendTextData conn message
 
 app :: MVar ServerState -> Application
 app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
   where
-    disconnect client = do
-      modifyMVar_ stateM $ \s -> do
-        putStrLn $ "Client with id '" ++ (fst client) ++ "' disconnected."
-        return $ removeClient client s
+    disconnect client = modifyMVar_ stateM $ \s -> do
+      print $ "Client with id '" ++ fst client ++ "' disconnected."
+      return $ removeClient client s
 
     wsApp :: WS.ServerApp
     wsApp pending_conn = do
@@ -120,8 +119,8 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
       modifyMVar_ stateM $ \state -> do
         putStrLn $ "Adding user " ++ id ++ " to lobby"
         return $ addToLobby client state
-      flip finally (disconnect client) $ do
-        WS.withPingThread conn 30 (return ()) $ do
+      flip finally (disconnect client) $
+        WS.withPingThread conn 30 (return ()) $
           forever $ do
             msg <- WS.receiveData conn
             state <- readMVar stateM
@@ -133,46 +132,46 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
                     modifyMVar_ stateM $ \state -> do
                       let state' = moveClientToRoom roomId client state
                       putStrLn $ "Client '" ++ id ++ "' created and joined room " ++ roomId
-                      putStrLn (show state')
+                      print state'
                       return state'
                     WS.sendTextData conn (encode CreateRoomResponse { roomId = roomId })
-                  (Just "join-room", Nothing) -> do
+                  (Just "join-room", Nothing) ->
                       WS.sendTextData conn (encode $ ErrorResponse "Please specify a room id as 'payload' in the request")
-                  (Just "join-room", Just roomId) -> do
+                  (Just "join-room", Just roomId) ->
                       case Map.lookup roomId (rooms state) of
-                        Nothing -> do
+                        Nothing ->
                           WS.sendTextData conn (encode ErrorResponse { err = "No room exists with id " ++ roomId })
                         Just _ -> do
                           modifyMVar_ stateM $ \state -> do
                             let state' = moveClientToRoom roomId client state
                             putStrLn $ "Client '" ++ id ++ "' joined room " ++ roomId
-                            putStrLn (show state')
+                            print state'
                             return state'
                           state <- readMVar stateM
                           broadcast roomId (TL.toStrict . T.decodeUtf8 $ encode JoinedRoom { connId = id, name = playerName client state }) state
                           -- TODO: Send current room state, including word and players in room
                           WS.sendTextData conn (encode JoinRoomResponse { roomId = roomId })
-                  (Just "player-name-updated", Nothing) -> do
+                  (Just "player-name-updated", Nothing) ->
                       WS.sendTextData conn (encode ErrorResponse { err = "No name provided." })
                   (Just "player-name-updated", Just name) -> do
                       modifyMVar_ stateM $ \state -> do
                         let state' = updatePlayerName client name state
-                        putStrLn $ "Client '" ++ id ++ "' changed name to '" ++ name ++ "'"
-                        putStrLn (show state')
+                        print $ "Client '" ++ id ++ "' changed name to '" ++ name ++ "'"
+                        print state'
                         return state'
                       let response = encode PlayerNameChanged { connId = id, name = name }
                       let roomId = getRoomId id state
                       case roomId of
-                        Nothing -> do
+                        Nothing ->
                           WS.sendTextData conn response
-                        Just roomId -> do
+                        Just roomId ->
                           broadcast roomId (TL.toStrict . T.decodeUtf8 $ response) state
                   (Just "new-word", _) -> do
                     word <- nextWord (gameWords state) easy
                     WS.sendTextData conn (encode NewWordResponse { word = word })
-                  _ -> do
+                  _ ->
                     WS.sendTextData conn (encode ErrorResponse { err = "Unknown message type" })
-              Nothing -> do
+              Nothing ->
                 WS.sendTextData conn (encode ErrorResponse { err = "Failed to parse message" })
 
     httpApp :: Application
