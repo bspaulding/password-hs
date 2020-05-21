@@ -177,7 +177,7 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
 
     httpApp :: Application
     httpApp = staticApp staticAppSettings
-    
+
     staticAppSettings = (defaultWebAppSettings "frontend/build") { ssIndices = [unsafeToPiece "index.html"]}
 
 readLines = fmap Prelude.lines . readFile
