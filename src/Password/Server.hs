@@ -28,6 +28,12 @@ broadcast roomId message s = do
   T.putStrLn $ T.pack $ "broadcast to room " ++ roomId ++ ": " ++ T.unpack message
   forM_ (findWithDefault [] roomId (rooms s)) $ \(_, conn) -> WS.sendTextData conn message
 
+mkApp :: IO Application
+mkApp = do
+  initialState <- newServerState
+  stateM <- newMVar initialState
+  return (app stateM)
+
 app :: MVar ServerState -> Application
 app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
   where
