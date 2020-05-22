@@ -22,9 +22,10 @@ data ServerState =
     , gameWords :: GameWords
     } deriving (Show)
 
-newServerState :: GameWords -> ServerState
-newServerState gameWords =
-  ServerState
+newServerState :: IO ServerState
+newServerState = do
+  gameWords <- loadGameWords
+  return ServerState
     { rooms = Map.empty
     , lobby = []
     , names = Map.empty
