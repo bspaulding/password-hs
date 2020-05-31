@@ -7,7 +7,57 @@ import qualified Data.Text.IO as T
 import Network.Socket (withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop)
 import Password.Server (mkApp)
+import Password.ServerState
 import qualified Network.WebSockets as WS
+import Test.Hspec
+
+main :: IO ()
+main = hspec $
+  describe "guessWord" $ do
+    let _words = GameWords { easy = ["lambda"], medium = [], hard = [] }
+    let game = PasswordGame { teamA = ["one", "two"]
+                            , teamB = ["three", "four"]
+                            , teamAClueGiver = "one"
+                            , teamBClueGiver = "three"
+                            , teamAGuesser = "two"
+                            , teamBGuesser = "four"
+                            , word = "lambda"
+                            , clues = ["haskell"]
+                            , guesses = []
+                            , teamAScore = 1
+                            , teamBScore = 1
+                            , possession = TeamA
+                            }
+    it "returns err if not a guesser" $ do
+      result <- guessWord "one" "guess" _words game
+      result `shouldBe` Left "You are not a guesser!"
+    it "only adds guess if wrong" $ do
+      result <- guessWord "two" "wrong" _words game
+      result `shouldBe` Right game { guesses = ["wrong"] }
+    it "increments score and resets for next round if correct" $ do
+      result <- guessWord "two" "lambda" _words game
+      result `shouldBe` Right game { teamAScore = 11
+                                   , teamAClueGiver = "two"
+                                   , teamBClueGiver = "four"
+                                   , teamAGuesser = "one"
+                                   , teamBGuesser = "three"
+                                   , guesses = []
+                                   , clues = []
+                                   , possession = TeamB }
+    it "points are earned by number of guesses used" $ do
+      result <- guessWord "four" "lambda" _words game { guesses = ["curry"]
+                                                      , clues = ["haskell", "function"]
+                                                      }
+      result `shouldBe` Right game { teamBScore = 10
+                                   , teamAClueGiver = "two"
+                                   , teamBClueGiver = "four"
+                                   , teamAGuesser = "one"
+                                   , teamBGuesser = "three"
+                                   , guesses = []
+                                   , clues = []
+                                   , possession = TeamB }
+
+-- E2E
 
 testClient :: String -> WS.ClientApp ()
 testClient name conn = do
@@ -37,8 +87,8 @@ onServerUp mvar = do
   print "server is up!"
   putMVar mvar ()
 
-main :: IO ()
-main = do
+e2eMain :: IO ()
+e2eMain = do
   app <- mkApp
   serverReadyMVar <- newEmptyMVar
   let serverSettings = setBeforeMainLoop (onServerUp serverReadyMVar) defaultSettings
