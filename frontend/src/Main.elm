@@ -510,35 +510,50 @@ view model =
                                         button [ onClick StartGame ] [ text "Start Game" ]
 
                                     Just game ->
-                                        div []
-                                            [ h2 [] [ text "Team A" ]
-                                            , ul [] (List.map (playerNameLi model) game.teamA)
-                                            , h2 [] [ text "Team B" ]
-                                            , ul [] (List.map (playerNameLi model) game.teamB)
-                                            , h2 [] [ text "Clues" ]
-                                            , ul [] (List.map (\s -> li [] [ text s ]) game.clues)
-                                            , h2 [] [ text "Guesses" ]
-                                            , ul [] (List.map (\s -> li [] [ text s ]) game.guesses)
-                                            , if amIGuessing model then
-                                                div []
-                                                    [ text "You are guessing!"
-                                                    , Html.form [ onSubmit SubmitGuess ] [ input [ type_ "text", value model.tempGuess, onInput GuessUpdated ] [] ]
-                                                    ]
+                                        if game.teamAScore >= 25 then
+                                            div []
+                                                [ text "Team A wins!"
+                                                , button [ onClick StartGame ] [ text "New Game" ]
+                                                ]
 
-                                              else
-                                                div []
-                                                    [ h2 [] [ text "Current Word" ]
-                                                    , div [] [ text game.word ]
-                                                    ]
-                                            , if amIGivingAClue model then
-                                                div []
-                                                    [ text "Your turn to give a clue!"
-                                                    , Html.form [ onSubmit SubmitClue ] [ input [ type_ "text", value model.tempClue, onInput ClueUpdated ] [] ]
-                                                    ]
+                                        else if game.teamBScore >= 25 then
+                                            div []
+                                                [ text "Team B wins!"
+                                                , button [ onClick StartGame ] [ text "New Game" ]
+                                                ]
 
-                                              else
-                                                div [] []
-                                            ]
+                                        else
+                                            div []
+                                                [ h2 [] [ text "Team A" ]
+                                                , ul [] (List.map (playerNameLi model) game.teamA)
+                                                , span [] [ text "Score: ", text (String.fromInt game.teamAScore) ]
+                                                , h2 [] [ text "Team B" ]
+                                                , ul [] (List.map (playerNameLi model) game.teamB)
+                                                , span [] [ text "Score: ", text (String.fromInt game.teamBScore) ]
+                                                , h2 [] [ text "Clues" ]
+                                                , ul [] (List.map (\s -> li [] [ text s ]) game.clues)
+                                                , h2 [] [ text "Guesses" ]
+                                                , ul [] (List.map (\s -> li [] [ text s ]) game.guesses)
+                                                , if amIGuessing model then
+                                                    div []
+                                                        [ text "You are guessing!"
+                                                        , Html.form [ onSubmit SubmitGuess ] [ input [ type_ "text", value model.tempGuess, onInput GuessUpdated ] [] ]
+                                                        ]
+
+                                                  else
+                                                    div []
+                                                        [ h2 [] [ text "Current Word" ]
+                                                        , div [] [ text game.word ]
+                                                        ]
+                                                , if amIGivingAClue model then
+                                                    div []
+                                                        [ text "Your turn to give a clue!"
+                                                        , Html.form [ onSubmit SubmitClue ] [ input [ type_ "text", value model.tempClue, onInput ClueUpdated ] [] ]
+                                                        ]
+
+                                                  else
+                                                    div [] []
+                                                ]
                                 ]
                     ]
         , pre [] [ code [] (List.indexedMap (\i m -> String.fromInt i ++ " " ++ m ++ "\n" |> text) (List.map wsMessageToString model.messages)) ]

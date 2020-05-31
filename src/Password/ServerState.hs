@@ -13,12 +13,12 @@ type RoomId = String
 type ConnId = String
 type Client = (ConnId, WS.Connection)
 
-data Possession = TeamA | TeamB deriving (Generic, Show)
+data Possession = TeamA | TeamB deriving (Generic, Show, Eq)
 
 instance ToJSON Possession
 
 -- TODO: we can compute scores if we track rounds,
---			 a round is the word, clues, and guesses
+--       a round is the word, clues, guesses, clue givers, and guessers
 data PasswordGame =
   PasswordGame
     { teamA :: [ConnId]
@@ -33,7 +33,7 @@ data PasswordGame =
     , teamAScore :: Int
     , teamBScore :: Int
     , possession :: Possession
-    } deriving (Generic, Show)
+    } deriving (Generic, Show, Eq)
 
 instance ToJSON PasswordGame
 
@@ -65,6 +65,52 @@ newGameInRoom gameWords clients = do
                         , teamBScore = 0
                         , possession = TeamA
                         }
+
+nextRoundInGame :: GameWords -> PasswordGame -> IO PasswordGame
+nextRoundInGame gameWords game = do
+  teamAGuesser <- takeRand $ Prelude.filter (/= teamAGuesser game) $ teamA game
+  teamBGuesser <- takeRand $ Prelude.filter (/= teamBGuesser game) $ teamB game
+  teamAClueGiver <- takeRand (Prelude.filter (/= teamAGuesser) (teamA game))
+  teamBClueGiver <- takeRand (Prelude.filter (/= teamBGuesser) (teamB game))
+  word <- nextWord gameWords easy
+  return game { teamAGuesser = teamAGuesser
+              , teamBGuesser = teamBGuesser
+              , teamAClueGiver = teamAClueGiver
+              , teamBClueGiver = teamBClueGiver
+              , word = word
+              , guesses = []
+              , clues = []
+              , possession = case possession game of
+                              TeamA -> TeamB
+                              TeamB -> TeamA
+              }
+
+guessWord :: ConnId -> String -> GameWords -> PasswordGame -> IO (Either String PasswordGame)
+guessWord id guess gameWords game =
+  case (teamAGuesser game == id, teamBGuesser game == id) of
+    (False, False) -> return $ Left "You are not a guesser!"
+    _ ->
+      if length (guesses game) == length (clues game) then
+        return $ Left "We aren't guessing yet, wait for a clue!"
+      else if guess == word game then do
+        let score = 11 - length (clues game)
+        let team = if mod (length (clues game)) 2 /= 0 then
+                      possession game
+                   else
+                      case possession game of
+                        TeamA -> TeamB
+                        TeamB -> TeamA
+        game' <- nextRoundInGame gameWords game { guesses = guess : guesses game
+                                                , teamAScore = case team of
+                                                                 TeamA -> score + teamAScore game
+                                                                 TeamB -> teamAScore game
+                                                , teamBScore = case team of
+                                                                 TeamA -> teamBScore game
+                                                                 TeamB -> score + teamBScore game
+                                                }
+        return $ Right game'
+      else
+        return $ Right game { guesses = guess : guesses game }
 
 data GameWords = GameWords { easy :: [String], medium :: [String], hard :: [String] } deriving (Show)
 

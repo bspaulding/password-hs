@@ -137,13 +137,11 @@ handleMessage stateM client msgMap = do
             case Map.lookup roomId (games state) of
               Nothing ->
                 WS.sendTextData conn (encode ErrorResponse { err = "you tried to submit a guess, but there's no game in progress" })
-              Just game ->
-                if teamAGuesser game /= id && teamBGuesser game /= id
-                then
-                  WS.sendTextData conn (encode ErrorResponse { err = "you are not a guesser!" })
-                else
-                  -- TODO: is the guess correct? then setup for the next round
-                  updateGameState stateM roomId game { guesses = guess : guesses game }
+              Just game -> do
+                result <- guessWord id guess (gameWords state) game
+                case result of
+                  Left err -> WS.sendTextData conn (encode ErrorResponse { err = err })
+                  Right game' -> updateGameState stateM roomId game'
     _ ->
       WS.sendTextData conn (encode ErrorResponse { err = "Unknown message type" })
 
