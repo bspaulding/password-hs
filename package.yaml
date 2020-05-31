@@ -60,3 +60,4 @@ tests:
     dependencies:
     - password-hs
     - network
+    - hspec
