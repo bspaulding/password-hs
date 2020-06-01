@@ -6,6 +6,16 @@ const app = Elm.Main.init({
   node: document.getElementById("root")
 });
 
+function getSocketHost() {
+  const { host, port, protocol } = window.location;
+  if (port === "3000") {
+    return "ws://localhost:8080";
+  } else {
+    // host includes port, hostname does not, so no need to append port here
+    return `${protocol === "https:" ? "wss" : "ws"}://${host}`;
+  }
+}
+
 const socket = new WebSocket("ws://localhost:8080");
 
 app.ports.sendMessage.subscribe(function(message) {
