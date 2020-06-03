@@ -21,4 +21,4 @@ jobs:
       with:
         node-version: 12.x 
     - run: npm i -g create-elm-app
-    - run: elm-app test
+    - run: cd frontend && elm-app test
