@@ -1,5 +1,5 @@
 # Build backend
-FROM fpco/stack-build:lts-15.12 as build-hs
+FROM fpco/stack-build:lts-14.27 as build-hs
 RUN mkdir /opt/build
 COPY . /opt/build
 RUN cd /opt/build && stack install --system-ghc
