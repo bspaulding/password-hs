@@ -1,22 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="theme-color" content="#000000">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+    <meta name="theme-color" content="#000000" />
     <!--
       manifest.json provides metadata used when your web app is added to the
       homescreen on Android. See https://developers.google.com/web/fundamentals/engage-and-retain/web-app-manifest/
     -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json">
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico">
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <title>Elm App</title>
-</head>
-<body>
+  </head>
+  <body>
     <noscript>
-        You need to enable JavaScript to run this app.
+      You need to enable JavaScript to run this app.
     </noscript>
+    <div>
+      <button id="play">Play Music</button>
+    </div>
     <div id="root"></div>
-</body>
+    <script type="module">
+      async function main() {
+        const Context = window.AudioContext || window.webkitAudioContext;
+        const context = new Context();
+
+        const buffer = await fetch("password-thinking-song.m4a")
+          .then(r => r.arrayBuffer())
+          .then(buffer => {
+            return new Promise((resolve, reject) =>
+              context.decodeAudioData(buffer, resolve, reject)
+            );
+          });
+        console.log({ buffer });
+        const source = context.createBufferSource();
+        console.log({ source });
+        source.buffer = buffer;
+        source.connect(context.destination);
+        source.loop = true;
+        source.start();
+        console.log("started..");
+      }
+      document.querySelector("#play").addEventListener("click", main);
+    </script>
+  </body>
 </html>
