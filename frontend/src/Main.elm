@@ -8,6 +8,7 @@ import Html.Events exposing (onClick, onInput, onSubmit)
 import Json.Decode as D
 import Json.Decode.Pipeline as DP
 import Json.Encode as E
+import Set
 
 
 port sendMessage : String -> Cmd msg
@@ -180,7 +181,13 @@ type alias Model =
     , game : Maybe PasswordGame
     , tempClue : String
     , tempGuess : String
+    , showDebugMessages : Bool
     }
+
+
+canStartGame : Model -> Bool
+canStartGame model =
+    4 <= Dict.size model.playersById
 
 
 playerName : Model -> Maybe String
@@ -202,6 +209,7 @@ init =
       , game = Nothing
       , tempClue = ""
       , tempGuess = ""
+      , showDebugMessages = False
       }
     , Cmd.none
     )
@@ -232,6 +240,8 @@ type Msg
     | ClueUpdated String
     | SubmitGuess
     | GuessUpdated String
+    | HideDebugMessages
+    | ShowDebugMessages
 
 
 handleWsMessage : Model -> WSMessage -> ( Model, Cmd Msg )
@@ -288,6 +298,12 @@ handleWsMessage model1 msg =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        HideDebugMessages ->
+            ( { model | showDebugMessages = False }, Cmd.none )
+
+        ShowDebugMessages ->
+            ( { model | showDebugMessages = True }, Cmd.none )
+
         PlayerNameUpdated name ->
             ( { model | name = name }, Cmd.none )
 
@@ -295,25 +311,25 @@ update msg model =
             ( model, sendMessage <| playerNameMessage model.name )
 
         UpdateRoomId roomId ->
-            ( { model | tmpRoomId = roomId }, Cmd.none )
+            ( { model | tmpRoomId = String.toUpper roomId }, Cmd.none )
 
         CreateRoom ->
             ( model, createRoom )
 
         JoinRoom ->
-            ( model, joinRoom model.tmpRoomId )
+            ( model, joinRoom <| String.toLower model.tmpRoomId )
 
         StartGame ->
             ( model, startGame )
 
         ClueUpdated clue ->
-            ( { model | tempClue = clue }, Cmd.none )
+            ( { model | tempClue = String.toLower clue }, Cmd.none )
 
         SubmitClue ->
             ( { model | tempClue = "" }, submitClue model.tempClue )
 
         GuessUpdated clue ->
-            ( { model | tempGuess = clue }, Cmd.none )
+            ( { model | tempGuess = String.toLower clue }, Cmd.none )
 
         SubmitGuess ->
             ( { model | tempGuess = "" }, submitGuess model.tempGuess )
@@ -471,93 +487,187 @@ wsMessageToString msg =
             "GameUpdated(<see debug state>)"
 
 
+scores : Model -> PasswordGame -> Html Msg
+scores model game =
+    div [ style "display" "flex", style "flex-direction" "row", style "justify-content" "space-around" ]
+        [ div []
+            [ h2 [] [ text "Team A" ]
+            , ul [ style "list-style-type" "none", style "margin" "initial 0px", style "padding" "0px" ] (List.map (playerNameLi model) game.teamA)
+            , span [] [ text "Score: ", text (String.fromInt game.teamAScore) ]
+            ]
+        , div []
+            [ h2 [] [ text "Team B" ]
+            , ul [ style "list-style-type" "none", style "margin" "initial 0px", style "padding" "0px" ] (List.map (playerNameLi model) game.teamB)
+            , span [] [ text "Score: ", text (String.fromInt game.teamBScore) ]
+            ]
+        ]
+
+
+roomDescription : Model -> String
+roomDescription model =
+    let
+        prefix =
+            "In room " ++ String.toUpper (Maybe.withDefault "unknown" model.roomId)
+
+        namesL =
+            Dict.values model.playersById
+                |> List.map .name
+                |> Set.fromList
+                |> Set.remove model.name
+                |> Set.toList
+                |> List.sort
+
+        lastName =
+            List.reverse namesL |> List.head |> Maybe.withDefault "Oops"
+
+        lenNames =
+            List.length namesL
+
+        names =
+            if lenNames > 1 then
+                String.join ", " (List.take (lenNames - 1) namesL)
+                    ++ (if lenNames == 2 then
+                            ""
+
+                        else
+                            ","
+                       )
+                    ++ " and "
+                    ++ lastName
+
+            else
+                String.join ", " namesL
+
+        suffix =
+            if Dict.size model.playersById == 1 then
+                ", all alone 😿."
+
+            else
+                " with " ++ names
+    in
+    prefix ++ suffix
+
+
 view : Model -> Html Msg
 view model =
-    div []
-        [ img [ src "/logo.svg" ] []
-        , h1 [] [ text "Your Elm App is working!" ]
+    div
+        []
+        [ div [] [ img [ src "password-logo.png" ] [] ]
+        , audio [ src "/password-thinking-song.m4a", autoplay False, controls True, loop True ] []
+        , div [ style "background" "rgba(108, 102, 129, 0.8)", style "padding" "16px" ]
+            [ case playerName model of
+                Nothing ->
+                    Html.form [ id "player-name", onSubmit PlayerNameSubmitted, style "display" "flex", style "flex-direction" "column", style "align-items" "center" ]
+                        [ h1 [] [ text "What's your name?" ]
+                        , input [ type_ "text", value model.name, onInput PlayerNameUpdated, placeholder "Lucielle Ball" ] []
+                        , input [ type_ "submit", value "Yep, that's me!" ] []
+                        ]
 
-        -- , audio [ src "/password-thinking-song.m4a", autoplay True, controls True, loop True ] []
-        , case playerName model of
-            Nothing ->
-                Html.form [ id "player-name", onSubmit PlayerNameSubmitted ]
-                    [ input [ type_ "text", value model.name, onInput PlayerNameUpdated ] []
-                    , input [ type_ "submit", value "Submit" ] []
-                    ]
-
-            Just name ->
-                div []
-                    [ div [] [ text ("Hello, " ++ name ++ "! 👋") ]
-                    , case model.roomId of
-                        Nothing ->
-                            div []
-                                [ button [ onClick CreateRoom ] [ text "Create Room" ]
-                                , Html.form [ onSubmit JoinRoom ]
-                                    [ input
-                                        [ type_ "text"
-                                        , placeholder "room id, ie \"wxyz\""
-                                        , onInput UpdateRoomId
+                Just name ->
+                    div []
+                        [ h1 [] [ text ("Hello, " ++ name ++ "! 👋") ]
+                        , case model.roomId of
+                            Nothing ->
+                                div []
+                                    [ button [ onClick CreateRoom ] [ text "Create a Room" ]
+                                    , h3 [] [ text "or join one" ]
+                                    , Html.form [ onSubmit JoinRoom ]
+                                        [ input
+                                            [ type_ "text"
+                                            , placeholder "room id, ie \"wxyz\""
+                                            , onInput UpdateRoomId
+                                            , value model.tmpRoomId
+                                            ]
+                                            []
+                                        , input [ type_ "submit", value "Join Room" ] []
                                         ]
-                                        []
                                     ]
-                                ]
 
-                        Just roomId ->
-                            div []
-                                [ text ("In room " ++ roomId)
-                                , case model.game of
-                                    Nothing ->
-                                        button [ onClick StartGame ] [ text "Start Game" ]
+                            Just roomId ->
+                                div []
+                                    [ div [] [ text <| roomDescription model ]
+                                    , case model.game of
+                                        Nothing ->
+                                            if canStartGame model then
+                                                button [ onClick StartGame ] [ text "Start Game" ]
 
-                                    Just game ->
-                                        if game.teamAScore >= 25 then
-                                            div []
-                                                [ text "Team A wins!"
-                                                , button [ onClick StartGame ] [ text "New Game" ]
-                                                ]
+                                            else
+                                                div []
+                                                    [ div [] [ text "Waiting for players..." ]
+                                                    , div [ style "font-style" "italic" ] [ text ("(" ++ String.fromInt (Dict.size model.playersById) ++ " out of 4+ players)") ]
+                                                    ]
 
-                                        else if game.teamBScore >= 25 then
-                                            div []
-                                                [ text "Team B wins!"
-                                                , button [ onClick StartGame ] [ text "New Game" ]
-                                                ]
+                                        Just game ->
+                                            if game.teamAScore >= 25 then
+                                                div []
+                                                    [ h2 [] [ text "Team A wins!" ]
+                                                    , button [ onClick StartGame ] [ text "New Game" ]
+                                                    , scores model game
+                                                    ]
 
-                                        else
-                                            div []
-                                                [ h2 [] [ text "Team A" ]
-                                                , ul [] (List.map (playerNameLi model) game.teamA)
-                                                , span [] [ text "Score: ", text (String.fromInt game.teamAScore) ]
-                                                , h2 [] [ text "Team B" ]
-                                                , ul [] (List.map (playerNameLi model) game.teamB)
-                                                , span [] [ text "Score: ", text (String.fromInt game.teamBScore) ]
-                                                , h2 [] [ text "Clues" ]
-                                                , ul [] (List.map (\s -> li [] [ text s ]) game.clues)
-                                                , h2 [] [ text "Guesses" ]
-                                                , ul [] (List.map (\s -> li [] [ text s ]) game.guesses)
-                                                , if amIGuessing model then
-                                                    div []
-                                                        [ text "You are guessing!"
-                                                        , Html.form [ onSubmit SubmitGuess ] [ input [ type_ "text", value model.tempGuess, onInput GuessUpdated ] [] ]
-                                                        ]
+                                            else if game.teamBScore >= 25 then
+                                                div []
+                                                    [ div [] [ text "Team B wins!" ]
+                                                    , button [ onClick StartGame ] [ text "New Game" ]
+                                                    , scores model game
+                                                    ]
 
-                                                  else
-                                                    div []
-                                                        [ h2 [] [ text "Current Word" ]
-                                                        , div [] [ text game.word ]
-                                                        ]
-                                                , if amIGivingAClue model then
-                                                    div []
-                                                        [ text "Your turn to give a clue!"
-                                                        , Html.form [ onSubmit SubmitClue ] [ input [ type_ "text", value model.tempClue, onInput ClueUpdated ] [] ]
-                                                        ]
+                                            else
+                                                div []
+                                                    [ if amIGuessing model then
+                                                        div []
+                                                            [ text "You are guessing!"
+                                                            , h3 [] [ text <| "The clue is \"" ++ Maybe.withDefault "" (List.head game.clues) ++ "\"" ]
+                                                            , div [] [ text "Your guess?" ]
+                                                            , Html.form [ onSubmit SubmitGuess ] [ input [ type_ "text", value model.tempGuess, onInput GuessUpdated ] [] ]
+                                                            ]
 
-                                                  else
-                                                    div [] []
-                                                ]
-                                ]
+                                                      else if game.word == "" then
+                                                        div [] [ text "You are a guesser, waiting for a clue..." ]
+
+                                                      else
+                                                        div []
+                                                            [ h3 [] [ text "The word is..." ]
+                                                            , h2 [] [ text game.word ]
+                                                            ]
+                                                    , if amIGivingAClue model then
+                                                        div []
+                                                            [ text "Your turn to give a clue!"
+                                                            , Html.form [ onSubmit SubmitClue ] [ input [ type_ "text", value model.tempClue, onInput ClueUpdated ] [] ]
+                                                            ]
+
+                                                      else
+                                                        div [] []
+                                                    , scores model game
+                                                    , h2 [] [ text "Clues" ]
+                                                    , ul [] (List.map (\s -> li [] [ text s ]) game.clues)
+                                                    , h2 [] [ text "Guesses" ]
+                                                    , ul [] (List.map (\s -> li [] [ text s ]) game.guesses)
+                                                    ]
+                                    ]
+                        ]
+            ]
+        , if debugEnabled then
+            if model.showDebugMessages then
+                div []
+                    [ button [ onClick HideDebugMessages ] [ text "Hide Debug" ]
+                    , h3 [] [ text "Debug Messages" ]
+                    , pre [] [ code [] (List.indexedMap (\i m -> String.fromInt i ++ " " ++ m ++ "\n" |> text) (List.map wsMessageToString model.messages)) ]
                     ]
-        , pre [] [ code [] (List.indexedMap (\i m -> String.fromInt i ++ " " ++ m ++ "\n" |> text) (List.map wsMessageToString model.messages)) ]
+
+            else
+                div []
+                    [ button [ onClick ShowDebugMessages ] [ text "Show Debug" ]
+                    ]
+
+          else
+            div [] []
         ]
+
+
+debugEnabled : Bool
+debugEnabled =
+    False
 
 
 playerNameLi : Model -> ConnId -> Html Msg

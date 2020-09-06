@@ -9,11 +9,20 @@
   height: inherit;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
   font-family: 'Source Sans Pro', 'Trebuchet MS', 'Lucida Grande', 'Bitstream Vera Sans', 'Helvetica Neue', sans-serif;
+  font-size: 18px;
   margin: 0;
   text-align: center;
-  color: #293c4b;
+  color: #FCFCFC;
+  background-image: url(/password-dots-and-lines.png);
+  background-repeat: repeat;
+  background-size: 100%;
+  background-color: rgb(108, 102, 129);
 }
 
 h1 {
@@ -23,4 +32,21 @@ h1 {
 img {
   margin: 20px 0;
   max-width: 200px;
+}
+
+input[type="text"] {
+  font-size: 18px;
+  padding: 8px;
+  text-align: center;
+}
+
+button,
+input[type="button"],
+input[type="submit"] {
+  -webkit-appearance: none;
+  font-size: 18px;
+  opacity: 1;
+  background-color: white;
+  border-radius: 4px;
+  padding: 6px 12px;
 }
