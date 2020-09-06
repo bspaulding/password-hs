@@ -1,0 +1,3 @@
+- filter word list for multiple word terms! is this really in password?
+- disallow giving the word as a clue
+- disallow actions on ended game
