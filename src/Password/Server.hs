@@ -2,15 +2,15 @@
 
 module Password.Server where
 
-import Control.Concurrent (MVar, newMVar, readMVar, modifyMVar_, swapMVar)
+import Control.Concurrent (MVar, modifyMVar_, newMVar, readMVar, swapMVar)
 import Control.Exception (finally)
-import Control.Monad (forever, forM_)
+import Control.Monad (forM_, forever)
 import Data.Aeson
 import Data.Map.Internal as Map
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as T
-import qualified Data.Text.IO as T
 import Data.UUID as UUID
 import Data.UUID.V4 as UUID
 import Network.HTTP.Types
@@ -37,12 +37,13 @@ broadcastToRoom roomId message s = do
 broadcastGame :: RoomId -> PasswordGame -> ServerState -> IO ()
 broadcastGame roomId game s = do
   print $ "broadcast game to room " ++ roomId ++ ": game = " ++ show game
-  let clueGivers = Prelude.filter
-                    (\connId -> connId /= Password.ServerState.teamAGuesser game && connId /= Password.ServerState.teamBGuesser game)
-                   $ Password.ServerState.teamA game ++ Password.ServerState.teamB game
+  let clueGivers =
+        Prelude.filter
+          (\connId -> connId /= Password.ServerState.teamAGuesser game && connId /= Password.ServerState.teamBGuesser game)
+          $ Password.ServerState.teamA game ++ Password.ServerState.teamB game
   let gameUpdated = GameUpdated game
-  let maskedGame = GameUpdated game { Password.ServerState.word = "" }
-  let guessers = [Password.ServerState.teamAGuesser game, Password.ServerState.teamBGuesser game ]
+  let maskedGame = GameUpdated game {Password.ServerState.word = ""}
+  let guessers = [Password.ServerState.teamAGuesser game, Password.ServerState.teamBGuesser game]
   broadcast (TL.toStrict . T.decodeUtf8 $ encode gameUpdated) (getClients clueGivers s)
   broadcast (TL.toStrict . T.decodeUtf8 $ encode maskedGame) (getClients guessers s)
 
@@ -63,87 +64,89 @@ handleMessage stateM client msgMap = do
         print $ "Client '" ++ id ++ "' created and joined room " ++ roomId
         print state'
         return state'
-      WS.sendTextData conn (encode CreateRoomResponse { roomId = roomId })
+      WS.sendTextData conn (encode CreateRoomResponse {roomId = roomId})
     (Just "join-room", Nothing) ->
-        WS.sendTextData conn (encode $ ErrorResponse "Please specify a room id as 'payload' in the request")
+      WS.sendTextData conn (encode $ ErrorResponse "Please specify a room id as 'payload' in the request")
     (Just "join-room", Just roomId) -> do
-        state <- readMVar stateM
-        case Map.lookup roomId (rooms state) of
-          Nothing ->
-            WS.sendTextData conn (encode ErrorResponse { err = "No room exists with id " ++ roomId })
-          Just _ -> do
-            modifyMVar_ stateM $ \state -> do
-              let state' = moveClientToRoom roomId client state
-              print $ "Client '" ++ id ++ "' joined room " ++ roomId
-              print state'
-              return state'
-            state <- readMVar stateM
-            broadcastToRoom roomId (TL.toStrict . T.decodeUtf8 $ encode JoinedRoom { connId = id, name = playerName client state }) state
-            let roomClients = getRoomClients roomId state
-            let playerNamesById = Map.fromList $ Prelude.map (\client -> (fst client, playerName client state)) roomClients
-            WS.sendTextData conn (encode JoinRoomResponse { roomId = roomId, playerNamesById = playerNamesById })
+      state <- readMVar stateM
+      case Map.lookup roomId (rooms state) of
+        Nothing ->
+          WS.sendTextData conn (encode ErrorResponse {err = "No room exists with id " ++ roomId})
+        Just _ -> do
+          modifyMVar_ stateM $ \state -> do
+            let state' = moveClientToRoom roomId client state
+            print $ "Client '" ++ id ++ "' joined room " ++ roomId
+            print state'
+            return state'
+          state <- readMVar stateM
+          broadcastToRoom roomId (TL.toStrict . T.decodeUtf8 $ encode JoinedRoom {connId = id, name = playerName client state}) state
+          let roomClients = getRoomClients roomId state
+          let playerNamesById = Map.fromList $ Prelude.map (\client -> (fst client, playerName client state)) roomClients
+          WS.sendTextData conn (encode JoinRoomResponse {roomId = roomId, playerNamesById = playerNamesById})
     (Just "player-name-updated", Nothing) ->
-        WS.sendTextData conn (encode ErrorResponse { err = "No name provided." })
+      WS.sendTextData conn (encode ErrorResponse {err = "No name provided."})
     (Just "player-name-updated", Just name) -> do
-        modifyMVar_ stateM $ \state -> do
-          let state' = updatePlayerName client name state
-          print $ "Client '" ++ id ++ "' changed name to '" ++ name ++ "'"
-          print state'
-          return state'
-        let response = encode PlayerNameChanged { connId = id, name = name }
-        state <- readMVar stateM
-        let roomId = getRoomId id state
-        case roomId of
-          Nothing ->
-            WS.sendTextData conn response
-          Just roomId ->
-            broadcastToRoom roomId (TL.toStrict . T.decodeUtf8 $ response) state
+      modifyMVar_ stateM $ \state -> do
+        let state' = updatePlayerName client name state
+        print $ "Client '" ++ id ++ "' changed name to '" ++ name ++ "'"
+        print state'
+        return state'
+      let response = encode PlayerNameChanged {connId = id, name = name}
+      state <- readMVar stateM
+      let roomId = getRoomId id state
+      case roomId of
+        Nothing ->
+          WS.sendTextData conn response
+        Just roomId ->
+          broadcastToRoom roomId (TL.toStrict . T.decodeUtf8 $ response) state
     (Just "new-word", _) -> do
       state <- readMVar stateM
       word <- nextWord (gameWords state) easy
-      WS.sendTextData conn (encode NewWordResponse { Password.WSResponse.word = word })
+      WS.sendTextData conn (encode NewWordResponse {Password.WSResponse.word = word})
     (Just "start-game", _) -> do
       state <- readMVar stateM
       case getRoomId id state of
         Nothing ->
-          WS.sendTextData conn (encode ErrorResponse { err = "Yikes, you asked to start a game, but you aren't in a room." })
+          WS.sendTextData conn (encode ErrorResponse {err = "Yikes, you asked to start a game, but you aren't in a room."})
         Just roomId ->
-          if length (getRoomClients roomId state) < 4 then
-            WS.sendTextData conn (encode ErrorResponse { err = "You need at least 4 people to start a game." })
-          else do
+          if length (getRoomClients roomId state) < 4
+            then WS.sendTextData conn (encode ErrorResponse {err = "You need at least 4 people to start a game."})
+            else do
               game <- newGameInRoom (gameWords state) (getRoomClients roomId state)
               updateGameState stateM roomId game
     (Just "submit-clue", Nothing) ->
-        WS.sendTextData conn (encode ErrorResponse { err = "You must supply a clue as 'payload' in the message" })
+      WS.sendTextData conn (encode ErrorResponse {err = "You must supply a clue as 'payload' in the message"})
     (Just "submit-clue", Just clue) -> do
-        print $ "Got a clue submission: " ++ clue
-        state <- readMVar stateM
-        case getRoomId id state of
-          Nothing ->
-            WS.sendTextData conn (encode ErrorResponse { err = "idk what room you are in" })
-          Just roomId -> do
-            print $ "Found room " ++ roomId
-            case Map.lookup roomId (games state) of
-              Nothing ->
-                WS.sendTextData conn (encode ErrorResponse { err = "you tried to submit a word, but there's no game in progress" })
-              Just game ->
-                updateGameState stateM roomId game { clues = clue : clues game }
+      print $ "Got a clue submission: " ++ clue
+      state <- readMVar stateM
+      case getRoomId id state of
+        Nothing ->
+          WS.sendTextData conn (encode ErrorResponse {err = "idk what room you are in"})
+        Just roomId -> do
+          print $ "Found room " ++ roomId
+          case Map.lookup roomId (games state) of
+            Nothing ->
+              WS.sendTextData conn (encode ErrorResponse {err = "you tried to submit a word, but there's no game in progress"})
+            Just game ->
+              if Password.ServerState.word game == clue
+                then WS.sendTextData conn (encode ErrorResponse {err = "you tried to submit the word as a clue!"})
+                else updateGameState stateM roomId game {clues = clue : clues game}
     (Just "submit-guess", Just guess) -> do
-        state <- readMVar stateM
-        case getRoomId id state of
-          Nothing ->
-            WS.sendTextData conn (encode ErrorResponse { err = "idk what room you are in" })
-          Just roomId ->
-            case Map.lookup roomId (games state) of
-              Nothing ->
-                WS.sendTextData conn (encode ErrorResponse { err = "you tried to submit a guess, but there's no game in progress" })
-              Just game -> do
-                result <- guessWord id guess (gameWords state) game
-                case result of
-                  Left err -> WS.sendTextData conn (encode ErrorResponse { err = err })
-                  Right game' -> updateGameState stateM roomId game'
+      state <- readMVar stateM
+      case getRoomId id state of
+        Nothing ->
+          WS.sendTextData conn (encode ErrorResponse {err = "idk what room you are in"})
+        Just roomId ->
+          case Map.lookup roomId (games state) of
+            Nothing ->
+              WS.sendTextData conn (encode ErrorResponse {err = "you tried to submit a guess, but there's no game in progress"})
+            Just game -> do
+              result <- guessWord id guess (gameWords state) game
+              case result of
+                Left err -> WS.sendTextData conn (encode ErrorResponse {err = err})
+                Right game' -> updateGameState stateM roomId game'
     _ ->
-      WS.sendTextData conn (encode ErrorResponse { err = "Unknown message type" })
+      WS.sendTextData conn (encode ErrorResponse {err = "Unknown message type"})
 
 updateGameState :: MVar ServerState -> RoomId -> PasswordGame -> IO ()
 updateGameState stateM roomId game = do
@@ -175,11 +178,9 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
             case decode msg :: Maybe (Map String String) of
               Just msgMap -> handleMessage stateM client msgMap
               Nothing ->
-                WS.sendTextData conn (encode ErrorResponse { err = "Failed to parse message" })
+                WS.sendTextData conn (encode ErrorResponse {err = "Failed to parse message"})
 
     httpApp :: Application
     httpApp = staticApp staticAppSettings
 
-    staticAppSettings = (defaultWebAppSettings "frontend/build") { ssIndices = [unsafeToPiece "index.html"]}
-
-
+    staticAppSettings = (defaultWebAppSettings "frontend/build") {ssIndices = [unsafeToPiece "index.html"]}

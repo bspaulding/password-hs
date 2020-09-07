@@ -1,2 +1,1 @@
-- disallow giving the word as a clue
 - disallow actions on ended game
