@@ -17,6 +17,30 @@ port sendMessage : String -> Cmd msg
 port receiveMessage : (String -> msg) -> Sub msg
 
 
+port sendActionPort : E.Value -> Cmd msg
+
+
+type JsAction
+    = MusicPlay
+    | MusicStop
+
+
+jsActionType : JsAction -> E.Value
+jsActionType action =
+    E.string <|
+        case action of
+            MusicPlay ->
+                "music-play"
+
+            MusicStop ->
+                "music-stop"
+
+
+encodeJsAction : JsAction -> E.Value
+encodeJsAction action =
+    E.object [ ( "type", jsActionType action ) ]
+
+
 createRoom : Cmd msg
 createRoom =
     E.object [ ( "type", E.string "create-room" ) ]
@@ -182,6 +206,7 @@ type alias Model =
     , tempClue : String
     , tempGuess : String
     , showDebugMessages : Bool
+    , musicPlaying : Bool
     }
 
 
@@ -210,6 +235,7 @@ init =
       , tempClue = ""
       , tempGuess = ""
       , showDebugMessages = False
+      , musicPlaying = False
       }
     , Cmd.none
     )
@@ -242,6 +268,7 @@ type Msg
     | GuessUpdated String
     | HideDebugMessages
     | ShowDebugMessages
+    | ToggleMusic
 
 
 handleWsMessage : Model -> WSMessage -> ( Model, Cmd Msg )
@@ -333,6 +360,17 @@ update msg model =
 
         SubmitGuess ->
             ( { model | tempGuess = "" }, submitGuess model.tempGuess )
+
+        ToggleMusic ->
+            ( { model | musicPlaying = not model.musicPlaying }
+            , sendActionPort <|
+                encodeJsAction <|
+                    if model.musicPlaying then
+                        MusicStop
+
+                    else
+                        MusicPlay
+            )
 
         Recv message ->
             case D.decodeString socketDecoder message of
@@ -553,7 +591,19 @@ view model =
     div
         []
         [ div [] [ img [ src "password-logo.png" ] [] ]
-        , audio [ src "/password-thinking-song.m4a", autoplay False, controls True, loop True ] []
+
+        -- , audio [ src "/password-thinking-song.m4a", autoplay False, controls True, loop True ] []
+        , div [ id "music-toggle" ]
+            [ span [] [ text "🎵" ]
+            , button [ onClick ToggleMusic ]
+                [ text <|
+                    if model.musicPlaying then
+                        "⏸"
+
+                    else
+                        "▶️"
+                ]
+            ]
         , div [ style "background" "rgba(108, 102, 129, 0.8)", style "padding" "16px" ]
             [ case playerName model of
                 Nothing ->
