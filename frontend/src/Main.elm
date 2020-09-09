@@ -531,12 +531,12 @@ scores model game =
         [ div []
             [ h2 [] [ text "Team A" ]
             , ul [ style "list-style-type" "none", style "margin" "initial 0px", style "padding" "0px" ] (List.map (playerNameLi model) game.teamA)
-            , span [] [ text "Score: ", text (String.fromInt game.teamAScore) ]
+            , span [] [ text "Score: ", span [ id "team-a-score" ] [ text (String.fromInt game.teamAScore) ] ]
             ]
         , div []
             [ h2 [] [ text "Team B" ]
             , ul [ style "list-style-type" "none", style "margin" "initial 0px", style "padding" "0px" ] (List.map (playerNameLi model) game.teamB)
-            , span [] [ text "Score: ", text (String.fromInt game.teamBScore) ]
+            , span [] [ text "Score: ", span [ id "team-b-score" ] [ text (String.fromInt game.teamBScore) ] ]
             ]
         ]
 
@@ -586,6 +586,10 @@ roomDescription model =
     prefix ++ suffix
 
 
+startGameButton =
+    button [ id "start-game", onClick StartGame ] [ text "Start Game" ]
+
+
 view : Model -> Html Msg
 view model =
     div
@@ -619,9 +623,9 @@ view model =
                         , case model.roomId of
                             Nothing ->
                                 div []
-                                    [ button [ onClick CreateRoom ] [ text "Create a Room" ]
+                                    [ button [ id "create-room", onClick CreateRoom ] [ text "Create a Room" ]
                                     , h3 [] [ text "or join one" ]
-                                    , Html.form [ onSubmit JoinRoom ]
+                                    , Html.form [ id "join-room", onSubmit JoinRoom ]
                                         [ input
                                             [ type_ "text"
                                             , placeholder "room id, ie \"wxyz\""
@@ -636,10 +640,11 @@ view model =
                             Just roomId ->
                                 div []
                                     [ div [] [ text <| roomDescription model ]
+                                    , input [ id "room-id", type_ "hidden", value roomId ] []
                                     , case model.game of
                                         Nothing ->
                                             if canStartGame model then
-                                                button [ onClick StartGame ] [ text "Start Game" ]
+                                                startGameButton
 
                                             else
                                                 div []
@@ -651,14 +656,14 @@ view model =
                                             if game.teamAScore >= 25 then
                                                 div []
                                                     [ h2 [] [ text "Team A wins!" ]
-                                                    , button [ onClick StartGame ] [ text "New Game" ]
+                                                    , startGameButton
                                                     , scores model game
                                                     ]
 
                                             else if game.teamBScore >= 25 then
                                                 div []
                                                     [ div [] [ text "Team B wins!" ]
-                                                    , button [ onClick StartGame ] [ text "New Game" ]
+                                                    , startGameButton
                                                     , scores model game
                                                     ]
 
@@ -669,21 +674,33 @@ view model =
                                                             [ text "You are guessing!"
                                                             , h3 [] [ text <| "The clue is \"" ++ Maybe.withDefault "" (List.head game.clues) ++ "\"" ]
                                                             , div [] [ text "Your guess?" ]
-                                                            , Html.form [ onSubmit SubmitGuess ] [ input [ type_ "text", value model.tempGuess, onInput GuessUpdated ] [] ]
+                                                            , Html.form
+                                                                [ id "submit-guess", onSubmit SubmitGuess ]
+                                                                [ input [ type_ "text", value model.tempGuess, onInput GuessUpdated ] []
+                                                                , input [ type_ "submit", value "Submit Guess" ] []
+                                                                ]
                                                             ]
 
                                                       else if game.word == "" then
-                                                        div [] [ text "You are a guesser, waiting for a clue..." ]
+                                                        div []
+                                                            [ text "You are a guesser, waiting for a clue..."
+
+                                                            -- this is hack for e2e, so we don't get blocked, could be better, but this is easier
+                                                            , input [ type_ "hidden", value "", id "current-word" ] []
+                                                            ]
 
                                                       else
                                                         div []
                                                             [ h3 [] [ text "The word is..." ]
-                                                            , h2 [] [ text game.word ]
+                                                            , h2 [ id "current-word" ] [ text game.word ]
                                                             ]
                                                     , if amIGivingAClue model then
                                                         div []
                                                             [ text "Your turn to give a clue!"
-                                                            , Html.form [ onSubmit SubmitClue ] [ input [ type_ "text", value model.tempClue, onInput ClueUpdated ] [] ]
+                                                            , Html.form [ id "submit-clue", onSubmit SubmitClue ]
+                                                                [ input [ type_ "text", value model.tempClue, onInput ClueUpdated ] []
+                                                                , input [ type_ "submit", value "Submit Clue" ] []
+                                                                ]
                                                             ]
 
                                                       else
