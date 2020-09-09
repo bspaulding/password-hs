@@ -16,7 +16,7 @@ function getSocketHost() {
   }
 }
 
-const socket = new WebSocket("ws://localhost:8080");
+const socket = new WebSocket(getSocketHost());
 
 app.ports.sendMessage.subscribe(function (message) {
   socket.send(message);
