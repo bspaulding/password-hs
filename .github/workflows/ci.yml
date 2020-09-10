@@ -7,8 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-
+  backend-build: 
     runs-on: ubuntu-latest
 
     steps:
@@ -31,19 +30,44 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
-    - name: Install stack dependencies
+    - name: Install dependencies
       run: stack setup
-    - name: Build backend
+    - name: Build
       run: stack build
-    - name: Run backend tests
+    - name: Run tests
       run: stack test
 
+  frontend-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
     - name: Use Node.js 12.x
       uses: actions/setup-node@v1
       with:
         node-version: 12.x 
     - run: npm i -g create-elm-app
     - run: cd frontend && elm-app test
+
+
+  acceptance-tests:
+    needs: [backend-build, frontend-build]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Restore Stack Cache
+      uses: actions/cache@v1
+      env:
+        cache-name: cache-stack
+      with:
+        path: ~/.stack
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
 
     - run: cd e2e && npm ci
     - run: node run-e2e.js
