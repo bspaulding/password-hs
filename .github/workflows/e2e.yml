@@ -1,4 +1,4 @@
-name: Haskell CI
+name: Acceptance Tests
 
 on:
   push:
@@ -31,9 +31,20 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
-    - name: Install dependencies
+    - name: Install stack dependencies
       run: stack setup
-    - name: Build
+    - name: Build backend
       run: stack build
-    - name: Run tests
+    - name: Run backend tests
       run: stack test
+
+    - name: Use Node.js 12.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 12.x 
+    - run: npm i -g create-elm-app
+    - run: cd frontend && elm-app test
+
+    - run: cd e2e && npm ci
+    - run: node run-e2e.js
+
