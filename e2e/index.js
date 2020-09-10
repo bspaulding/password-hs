@@ -152,6 +152,7 @@ async function assertScore(pages, a, b) {
 async function main() {
   const browser = await puppeteer.launch({ headless: process.env.HEADLESS !== "false" });
 
+  let exception;
   try {
     const [page1, roomId] = await identify(browser, 'one');
     console.log({ roomId });
@@ -194,11 +195,16 @@ async function main() {
 
     console.log("OK!")
   } catch (e) {
+    exception = e;
     console.error(e);
     await browser.close();
   }
 
   await browser.close();
+
+  if (exception) {
+    throw exception;
+  }
 }
 
-main();
+module.exports = { main };
