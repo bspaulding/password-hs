@@ -69,6 +69,13 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - name: Use Node.js 12.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 12.x 
+
+    - run: npm i -g create-elm-app
+
     - run: cd e2e && npm ci
     - run: node run-e2e.js
 
