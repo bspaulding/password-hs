@@ -150,10 +150,10 @@ handleMessage stateM client msgMap = do
       WS.sendTextData conn (encode ErrorResponse {err = "Unknown message type"})
 
 updateGameState :: MVar ServerState -> RoomId -> PasswordGame -> IO ()
-updateGameState stateM roomId game = do
-  modifyMVar_ stateM $ return . setGameInRoom roomId game
+updateGameState stateM aRoomId game = do
+  modifyMVar_ stateM $ return . setGameInRoom aRoomId game
   state' <- readMVar stateM
-  broadcastGame roomId game state'
+  broadcastGame aRoomId game state'
 
 app :: MVar ServerState -> Application
 app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
