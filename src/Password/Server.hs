@@ -127,10 +127,11 @@ handleMessage stateM client msgMap = do
           case Map.lookup roomId (games state) of
             Nothing ->
               WS.sendTextData conn (encode ErrorResponse {err = "you tried to submit a word, but there's no game in progress"})
-            Just game ->
-              if Password.ServerState.word game == clue
-                then WS.sendTextData conn (encode ErrorResponse {err = "you tried to submit the word as a clue!"})
-                else updateGameState stateM roomId game {clues = clue : clues game}
+            Just game -> do
+              result <- submitClue id clue (gameWords state) game
+              case result of
+                Left err -> WS.sendTextData conn (encode ErrorResponse {err = err})
+                Right game' -> updateGameState stateM roomId game'
     (Just "submit-guess", Just guess) -> do
       state <- readMVar stateM
       case getRoomId id state of

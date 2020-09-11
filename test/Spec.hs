@@ -6,56 +6,76 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Network.Socket (withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop)
+import qualified Network.WebSockets as WS
 import Password.Server (mkApp)
 import Password.ServerState
-import qualified Network.WebSockets as WS
 import Test.Hspec
 
 main :: IO ()
-main = hspec $
+main = hspec $ do
+  let _words = GameWords {easy = ["lambda"], medium = [], hard = []}
+  let game =
+        PasswordGame
+          { teamA = ["one", "two"],
+            teamB = ["three", "four"],
+            teamAClueGiver = "one",
+            teamBClueGiver = "three",
+            teamAGuesser = "two",
+            teamBGuesser = "four",
+            word = "lambda",
+            clues = ["haskell"],
+            guesses = [],
+            teamAScore = 1,
+            teamBScore = 1,
+            possession = TeamA
+          }
+  describe "submitClue" $ do
+    it "returns err if clue is word" $ do
+      result <- submitClue "one" (word game) _words game
+      result `shouldBe` Left "you tried to submit the word as a clue!"
   describe "guessWord" $ do
-    let _words = GameWords { easy = ["lambda"], medium = [], hard = [] }
-    let game = PasswordGame { teamA = ["one", "two"]
-                            , teamB = ["three", "four"]
-                            , teamAClueGiver = "one"
-                            , teamBClueGiver = "three"
-                            , teamAGuesser = "two"
-                            , teamBGuesser = "four"
-                            , word = "lambda"
-                            , clues = ["haskell"]
-                            , guesses = []
-                            , teamAScore = 1
-                            , teamBScore = 1
-                            , possession = TeamA
-                            }
     it "returns err if not a guesser" $ do
       result <- guessWord "one" "guess" _words game
       result `shouldBe` Left "You are not a guesser!"
     it "only adds guess if wrong" $ do
       result <- guessWord "two" "wrong" _words game
-      result `shouldBe` Right game { guesses = ["wrong"] }
+      result `shouldBe` Right game {guesses = ["wrong"]}
     it "increments score and resets for next round if correct" $ do
       result <- guessWord "two" "lambda" _words game
-      result `shouldBe` Right game { teamAScore = 11
-                                   , teamAClueGiver = "two"
-                                   , teamBClueGiver = "four"
-                                   , teamAGuesser = "one"
-                                   , teamBGuesser = "three"
-                                   , guesses = []
-                                   , clues = []
-                                   , possession = TeamB }
+      result
+        `shouldBe` Right
+          game
+            { teamAScore = 11,
+              teamAClueGiver = "two",
+              teamBClueGiver = "four",
+              teamAGuesser = "one",
+              teamBGuesser = "three",
+              guesses = [],
+              clues = [],
+              possession = TeamB
+            }
     it "points are earned by number of guesses used" $ do
-      result <- guessWord "four" "lambda" _words game { guesses = ["curry"]
-                                                      , clues = ["haskell", "function"]
-                                                      }
-      result `shouldBe` Right game { teamBScore = 10
-                                   , teamAClueGiver = "two"
-                                   , teamBClueGiver = "four"
-                                   , teamAGuesser = "one"
-                                   , teamBGuesser = "three"
-                                   , guesses = []
-                                   , clues = []
-                                   , possession = TeamB }
+      result <-
+        guessWord
+          "four"
+          "lambda"
+          _words
+          game
+            { guesses = ["curry"],
+              clues = ["haskell", "function"]
+            }
+      result
+        `shouldBe` Right
+          game
+            { teamBScore = 10,
+              teamAClueGiver = "two",
+              teamBClueGiver = "four",
+              teamAGuesser = "one",
+              teamBGuesser = "three",
+              guesses = [],
+              clues = [],
+              possession = TeamB
+            }
 
 -- E2E
 
@@ -103,9 +123,13 @@ e2eMain = do
 myForkIO :: IO () -> IO (MVar ())
 myForkIO io = do
   mvar <- newEmptyMVar
-  _ <- forkFinally io (\result -> do
-    case result of
-      Left _ -> print result
-      Right _ -> return ()
-    putMVar mvar ())
+  _ <-
+    forkFinally
+      io
+      ( \result -> do
+          case result of
+            Left _ -> print result
+            Right _ -> return ()
+          putMVar mvar ()
+      )
   return mvar

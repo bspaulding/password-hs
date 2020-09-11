@@ -92,6 +92,13 @@ nextRoundInGame gameWords game = do
           TeamB -> TeamA
       }
 
+submitClue :: ConnId -> String -> GameWords -> PasswordGame -> IO (Either String PasswordGame)
+submitClue id clue gameWords game =
+  return $
+    if word game == clue
+      then Left "you tried to submit the word as a clue!"
+      else Right game {clues = clue : clues game}
+
 guessWord :: ConnId -> String -> GameWords -> PasswordGame -> IO (Either String PasswordGame)
 guessWord id guess gameWords game =
   case (teamAGuesser game == id, teamBGuesser game == id) of
