@@ -25,8 +25,7 @@ import WaiAppStatic.Types (unsafeToPiece)
 
 broadcast :: T.Text -> [Client] -> IO ()
 broadcast message clients = do
-  print "broadcasting message: "
-  print message
+  putStrLn $ "broadcasting message: " ++ (show message)
   forM_ clients $ \(_, conn) -> WS.sendTextData conn message
 
 broadcastToRoom :: RoomId -> T.Text -> ServerState -> IO ()
@@ -36,7 +35,7 @@ broadcastToRoom roomId message s = do
 
 broadcastGame :: RoomId -> PasswordGame -> ServerState -> IO ()
 broadcastGame roomId game s = do
-  print $ "broadcast game to room " ++ roomId ++ ": game = " ++ show game
+  putStrLn $ "broadcast game to room " ++ roomId ++ ": game = " ++ show game
   let clueGivers =
         Prelude.filter
           (\connId -> connId /= Password.ServerState.teamAGuesser game && connId /= Password.ServerState.teamBGuesser game)
@@ -61,7 +60,7 @@ handleMessage stateM client msgMap = do
       roomId <- makeRoomId
       modifyMVar_ stateM $ \state -> do
         let state' = moveClientToRoom roomId client state
-        print $ "Client '" ++ id ++ "' created and joined room " ++ roomId
+        putStrLn $ "Client '" ++ id ++ "' created and joined room " ++ roomId
         print state'
         return state'
       WS.sendTextData conn (encode CreateRoomResponse {roomId = roomId})
@@ -75,7 +74,7 @@ handleMessage stateM client msgMap = do
         Just _ -> do
           modifyMVar_ stateM $ \state -> do
             let state' = moveClientToRoom roomId client state
-            print $ "Client '" ++ id ++ "' joined room " ++ roomId
+            putStrLn $ "Client '" ++ id ++ "' joined room " ++ roomId
             print state'
             return state'
           state <- readMVar stateM
@@ -88,7 +87,7 @@ handleMessage stateM client msgMap = do
     (Just "player-name-updated", Just name) -> do
       modifyMVar_ stateM $ \state -> do
         let state' = updatePlayerName client name state
-        print $ "Client '" ++ id ++ "' changed name to '" ++ name ++ "'"
+        putStrLn $ "Client '" ++ id ++ "' changed name to '" ++ name ++ "'"
         print state'
         return state'
       let response = encode PlayerNameChanged {connId = id, name = name}
@@ -117,13 +116,13 @@ handleMessage stateM client msgMap = do
     (Just "submit-clue", Nothing) ->
       WS.sendTextData conn (encode ErrorResponse {err = "You must supply a clue as 'payload' in the message"})
     (Just "submit-clue", Just clue) -> do
-      print $ "Got a clue submission: " ++ clue
+      putStrLn $ "Got a clue submission: " ++ clue
       state <- readMVar stateM
       case getRoomId id state of
         Nothing ->
           WS.sendTextData conn (encode ErrorResponse {err = "idk what room you are in"})
         Just roomId -> do
-          print $ "Found room " ++ roomId
+          putStrLn $ "Found room " ++ roomId
           case Map.lookup roomId (games state) of
             Nothing ->
               WS.sendTextData conn (encode ErrorResponse {err = "you tried to submit a word, but there's no game in progress"})
@@ -159,7 +158,7 @@ app :: MVar ServerState -> Application
 app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
   where
     disconnect client = modifyMVar_ stateM $ \s -> do
-      print $ "Client with id '" ++ fst client ++ "' disconnected."
+      putStrLn $ "Client with id '" ++ fst client ++ "' disconnected."
       return $ removeClient client s
 
     wsApp :: WS.ServerApp
@@ -169,13 +168,13 @@ app stateM = websocketsOr WS.defaultConnectionOptions wsApp httpApp
       let client = (id, conn)
       WS.sendTextData conn (encode (IdentifyConnection id))
       modifyMVar_ stateM $ \state -> do
-        print $ "Adding user " ++ id ++ " to lobby"
+        putStrLn $ "Adding user " ++ id ++ " to lobby"
         return $ addToLobby client (addClient client state)
       flip finally (disconnect client) $
         WS.withPingThread conn 30 (return ()) $
           forever $ do
             msg <- WS.receiveData conn
-            print $ "Got message from " ++ id
+            putStrLn $ "Got message from " ++ id
             case decode msg :: Maybe (Map String String) of
               Just msgMap -> handleMessage stateM client msgMap
               Nothing ->
