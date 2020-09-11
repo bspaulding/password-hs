@@ -29,16 +29,16 @@ broadcast message clients = do
   forM_ clients $ \(_, conn) -> WS.sendTextData conn message
 
 broadcastToRoom :: RoomId -> T.Text -> ServerState -> IO ()
-broadcastToRoom roomId message s = do
-  T.putStrLn $ T.pack $ "broadcast to room " ++ roomId ++ ": " ++ T.unpack message
-  broadcast message (getRoomClients roomId s)
+broadcastToRoom aRoomId message s = do
+  T.putStrLn $ T.pack $ "broadcast to room " ++ aRoomId ++ ": " ++ T.unpack message
+  broadcast message (getRoomClients aRoomId s)
 
 broadcastGame :: RoomId -> PasswordGame -> ServerState -> IO ()
-broadcastGame roomId game s = do
-  putStrLn $ "broadcast game to room " ++ roomId ++ ": game = " ++ show game
+broadcastGame aRoomId game s = do
+  putStrLn $ "broadcast game to room " ++ aRoomId ++ ": game = " ++ show game
   let clueGivers =
         Prelude.filter
-          (\connId -> connId /= Password.ServerState.teamAGuesser game && connId /= Password.ServerState.teamBGuesser game)
+          (\aConnId -> aConnId /= Password.ServerState.teamAGuesser game && aConnId /= Password.ServerState.teamBGuesser game)
           $ Password.ServerState.teamA game ++ Password.ServerState.teamB game
   let gameUpdated = GameUpdated game
   let maskedGame = GameUpdated game {Password.ServerState.word = ""}
