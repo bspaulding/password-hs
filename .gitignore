@@ -2,3 +2,4 @@
 *~
 .devcontainer
 e2e/node_modules
+.hspec-failures
