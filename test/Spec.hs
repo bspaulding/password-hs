@@ -5,14 +5,22 @@ import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Network.Socket (withSocketsDo)
-import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop)
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 import qualified Network.WebSockets as WS
 import Password.Server (mkApp)
 import Password.ServerState
 import Test.Hspec
 
 main :: IO ()
-main = hspec $ do
+main = do
+  _ <- putStrLn "Running unit tests..."
+  _ <- units
+  _ <- putStrLn "\nRunning e2e tests...\n"
+  _ <- e2eMain
+  return ()
+
+units :: IO ()
+units = hspec $ do
   let _words = GameWords {easy = ["lambda"], medium = [], hard = []}
   let game =
         PasswordGame
@@ -81,21 +89,21 @@ main = hspec $ do
 
 testClient :: String -> WS.ClientApp ()
 testClient name conn = do
-  print $ "[testClient(" ++ name ++ ")] Started"
-  msg <- WS.receiveData conn
-  print $ "[testClient(" ++ name ++ ")] received message:"
-  T.putStrLn msg
+  putStrLn $ "[testClient(" ++ name ++ ")] Started"
+  msg1 <- WS.receiveData conn
+  putStrLn $ "[testClient(" ++ name ++ ")] received message:"
+  T.putStrLn msg1
   WS.sendTextData conn $ T.pack $ "{\"type\":\"player-name-updated\",\"payload\":\"" ++ name ++ "\"}"
-  msg <- WS.receiveData conn
-  print $ "[testClient(" ++ name ++ ")] received message:"
-  T.putStrLn msg
+  msg2 <- WS.receiveData conn
+  putStrLn $ "[testClient(" ++ name ++ ")] received message:"
+  T.putStrLn msg2
 
 runTestClients :: IO ()
 runTestClients = do
-  one <- myForkIO $ withSocketsDo $ WS.runClient "localhost" 3000 "/" (testClient "one")
-  two <- myForkIO $ withSocketsDo $ WS.runClient "localhost" 3000 "/" (testClient "two")
-  three <- myForkIO $ withSocketsDo $ WS.runClient "localhost" 3000 "/" (testClient "three")
-  four <- myForkIO $ withSocketsDo $ WS.runClient "localhost" 3000 "/" (testClient "four")
+  one <- myForkIO "client one" $ withSocketsDo $ WS.runClient "127.0.0.1" 8080 "/" (testClient "one")
+  two <- myForkIO "client two" $ withSocketsDo $ WS.runClient "127.0.0.1" 8080 "/" (testClient "two")
+  three <- myForkIO "client three" $ withSocketsDo $ WS.runClient "127.0.0.1" 8080 "/" (testClient "three")
+  four <- myForkIO "client four" $ withSocketsDo $ WS.runClient "127.0.0.1" 8080 "/" (testClient "four")
   _ <- takeMVar one
   _ <- takeMVar two
   _ <- takeMVar three
@@ -104,32 +112,36 @@ runTestClients = do
 
 onServerUp :: MVar () -> IO ()
 onServerUp mvar = do
-  print "server is up!"
+  putStrLn "server is up!"
   putMVar mvar ()
 
 e2eMain :: IO ()
 e2eMain = do
   app <- mkApp
   serverReadyMVar <- newEmptyMVar
-  let serverSettings = setBeforeMainLoop (onServerUp serverReadyMVar) defaultSettings
-  _ <- myForkIO $ runSettings serverSettings app
+  let serverSettings = setPort 8080 $ setBeforeMainLoop (onServerUp serverReadyMVar) defaultSettings
+  _ <- myForkIO "server" $ runSettings serverSettings app
   _ <- takeMVar serverReadyMVar
-  print "[main] Started the server"
-  clientMVar <- myForkIO runTestClients
-  print "[main] Started the client..."
+  putStrLn "[main] Started the server"
+  clientMVar <- myForkIO "runTestClients" runTestClients
+  putStrLn "[main] Started the clients..."
   _ <- takeMVar clientMVar
-  print "[main] All done."
+  putStrLn "[main] All done."
 
-myForkIO :: IO () -> IO (MVar ())
-myForkIO io = do
+myForkIO :: String -> IO () -> IO (MVar ())
+myForkIO label io = do
   mvar <- newEmptyMVar
   _ <-
     forkFinally
       io
       ( \result -> do
           case result of
-            Left _ -> print result
-            Right _ -> return ()
+            Left _ -> do
+              _ <- putStrLn (label ++ " exited with failure.\n" ++ show result)
+              return ()
+            Right _ -> do
+              _ <- putStrLn (label ++ " exited ok.")
+              return ()
           putMVar mvar ()
       )
   return mvar
