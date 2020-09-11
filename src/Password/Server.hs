@@ -57,31 +57,37 @@ handleMessage stateM client msgMap = do
   let (id, conn) = client
   case (Map.lookup "type" msgMap, Map.lookup "payload" msgMap) of
     (Just "create-room", _) -> do
-      roomId <- makeRoomId
+      aRoomId <- makeRoomId
       modifyMVar_ stateM $ \state -> do
-        let state' = moveClientToRoom roomId client state
-        putStrLn $ "Client '" ++ id ++ "' created and joined room " ++ roomId
+        let state' = moveClientToRoom aRoomId client state
+        putStrLn $ "Client '" ++ id ++ "' created and joined room " ++ aRoomId
         print state'
         return state'
-      WS.sendTextData conn (encode CreateRoomResponse {roomId = roomId})
+      WS.sendTextData conn (encode CreateRoomResponse {roomId = aRoomId})
     (Just "join-room", Nothing) ->
       WS.sendTextData conn (encode $ ErrorResponse "Please specify a room id as 'payload' in the request")
-    (Just "join-room", Just roomId) -> do
+    (Just "join-room", Just aRoomId) -> do
       state <- readMVar stateM
-      case Map.lookup roomId (rooms state) of
+      case Map.lookup aRoomId (rooms state) of
         Nothing ->
-          WS.sendTextData conn (encode ErrorResponse {err = "No room exists with id " ++ roomId})
+          WS.sendTextData conn (encode ErrorResponse {err = "No room exists with id " ++ aRoomId})
         Just _ -> do
-          modifyMVar_ stateM $ \state -> do
-            let state' = moveClientToRoom roomId client state
-            putStrLn $ "Client '" ++ id ++ "' joined room " ++ roomId
+          modifyMVar_ stateM $ \state_ -> do
+            let state' = moveClientToRoom aRoomId client state_
+            putStrLn $ "Client '" ++ id ++ "' joined room " ++ aRoomId
             print state'
             return state'
-          state <- readMVar stateM
-          broadcastToRoom roomId (TL.toStrict . T.decodeUtf8 $ encode JoinedRoom {connId = id, name = playerName client state}) state
-          let roomClients = getRoomClients roomId state
-          let playerNamesById = Map.fromList $ Prelude.map (\client -> (fst client, playerName client state)) roomClients
-          WS.sendTextData conn (encode JoinRoomResponse {roomId = roomId, playerNamesById = playerNamesById})
+          state_ <- readMVar stateM
+          broadcastToRoom aRoomId (TL.toStrict . T.decodeUtf8 $ encode JoinedRoom {connId = id, name = playerName client state_}) state_
+          let roomClients = getRoomClients aRoomId state_
+          WS.sendTextData
+            conn
+            ( encode
+                JoinRoomResponse
+                  { roomId = aRoomId,
+                    playerNamesById = Map.fromList $ Prelude.map (\client_ -> (fst client_, playerName client_ state_)) roomClients
+                  }
+            )
     (Just "player-name-updated", Nothing) ->
       WS.sendTextData conn (encode ErrorResponse {err = "No name provided."})
     (Just "player-name-updated", Just name) -> do
