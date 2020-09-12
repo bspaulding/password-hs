@@ -97,7 +97,6 @@ jobs:
     - uses: docker/build-push-action@v2
       with:
         push: true
-        repository: bspaulding/password
-        tag_with_ref: true
+        tag: ${{ GITHUB_REF }}
     - run: echo ${{ steps.docker_build.outputs.digest }}
 
